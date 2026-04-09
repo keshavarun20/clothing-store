@@ -8,7 +8,7 @@ export const envValidationSchema = Joi.object({
   SUPABASE_URL:       Joi.string().uri().required(),
   SUPABASE_SERVICE_ROLE_KEY: Joi.string().required(),
   STRIPE_SECRET_KEY:  Joi.string().required(),
-  STRIPE_WEBHOOK_SECRET: Joi.string().required(),
+  STRIPE_WEBHOOK_SECRET: Joi.string().optional(),
   RESEND_API_KEY:     Joi.string().required(),
   REDIS_URL:          Joi.string().required(),
 });
