@@ -124,4 +124,71 @@ export class ProductsService {
     if (error) throw new NotFoundException('Product not found');
     return { deleted: true };
   }
+
+  async findAllAdmin() {
+    const { data, error } = await this.supabase.db
+      .from('products')
+      .select(
+        `
+      *,
+      product_images(*),
+      product_variants(*)
+    `,
+      )
+      .order('created_at', { ascending: false });
+
+    if (error) throw new Error(error.message);
+    return data;
+  }
+
+  async replaceImages(id: string, images: { url: string; position: number }[]) {
+    // delete existing images
+    await this.supabase.db.from('product_images').delete().eq('product_id', id);
+
+    // insert new ones
+    if (images.length) {
+      const { error } = await this.supabase.db.from('product_images').insert(
+        images.map((img, index) => ({
+          url: img.url,
+          position: index,
+          product_id: id,
+        })),
+      );
+      if (error) throw new Error(error.message);
+    }
+
+    return { updated: true };
+  }
+
+  async replaceVariants(
+    id: string,
+    variants: { color: string; size: string; stock: number }[],
+  ) {
+    // 1. dedupe input first (important)
+    const map = new Map();
+
+    for (const v of variants) {
+      const key = `${v.color}-${v.size}`;
+      map.set(key, v);
+    }
+
+    const clean = Array.from(map.values());
+
+    // 2. upsert each variant
+    const { error } = await this.supabase.db.from('product_variants').upsert(
+      clean.map((v) => ({
+        product_id: id,
+        color: v.color,
+        size: v.size,
+        stock: v.stock,
+      })),
+      {
+        onConflict: 'product_id,color,size',
+      },
+    );
+
+    if (error) throw new Error(error.message);
+
+    return { updated: true };
+  }
 }

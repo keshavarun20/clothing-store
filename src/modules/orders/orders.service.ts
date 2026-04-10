@@ -5,10 +5,14 @@ import {
 } from '@nestjs/common';
 import { SupabaseService } from 'src/database/supabase.service';
 import { CreateOrderDto } from './create-order.dto';
+import { EmailService } from '../email/email.service';
 
 @Injectable()
 export class OrdersService {
-  constructor(private supabase: SupabaseService) {}
+  constructor(
+    private supabase: SupabaseService,
+    private email: EmailService,
+  ) {}
 
   async create(dto: CreateOrderDto) {
     // step 1 — fetch all variants to get prices and check stock
@@ -132,5 +136,65 @@ export class OrdersService {
       .eq('id', id);
 
     if (error) throw new Error(error.message);
+  }
+
+  async markShipped(id: string, trackingUrl: string, carrier: string) {
+    const order = await this.findOne(id);
+
+    await this.supabase.db
+      .from('orders')
+      .update({
+        status: 'shipped',
+        tracking_url: trackingUrl,
+        carrier,
+      })
+      .eq('id', id);
+
+    await this.email.sendShippingNotification({
+      email: order.customer_email,
+      name: order.customer_name,
+      orderId: order.id,
+      trackingUrl,
+      carrier,
+    });
+
+    return { updated: true };
+  }
+
+  async markDelivered(id: string) {
+    const order = await this.findOne(id);
+
+    await this.supabase.db
+      .from('orders')
+      .update({ status: 'delivered' })
+      .eq('id', id);
+
+    await this.email.sendDeliveryNotification({
+      email: order.customer_email,
+      name: order.customer_name,
+      orderId: order.id,
+    });
+
+    return { updated: true };
+  }
+
+  async findAll() {
+    const { data, error } = await this.supabase.db
+      .from('orders')
+      .select(
+        `
+      id,
+      customer_name,
+      customer_email,
+      status,
+      total,
+      created_at,
+      order_items(quantity)
+    `,
+      )
+      .order('created_at', { ascending: false });
+
+    if (error) throw new Error(error.message);
+    return data;
   }
 }
